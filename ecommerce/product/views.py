@@ -16,6 +16,8 @@ from django.db import transaction
 from django.contrib.auth.hashers import make_password
 from django.contrib.sessions.backends.db import SessionStore
 import json
+from django.conf import settings
+import stripe
 # Create your views here.
 
 
@@ -27,60 +29,63 @@ class ProductView(ListAPIView):
 class AddToCart(APIView):
     def post(self, request, product_id):
         # Retrieve the product and user
-        product = Product.objects.get( id=product_id)
+        product = Product.objects.get(id=product_id)
         user_id = request.data.get('user_id')
-        user = User.objects.get( id=user_id)
+        user = User.objects.get(id=user_id)
 
         # Retrieve the user's cart
         cart, created = Cart.objects.get_or_create(user=user)
 
         # Iterate through the session cart data and add each item to the user's cart
-        cart_item, created = CartItem.objects.get_or_create(product=product, cart=cart, user=user)
+        cart_item, created = CartItem.objects.get_or_create(
+            product=product, cart=cart, user=user)
         if created:
                 cart_item.quantity = 1
                 cart_item.price = cart_item.product.price * cart_item.quantity
+                cart_item.price = round(cart_item.price)
                 cart_item.save()
                 return JsonResponse({
-                        'message' : 'added to cart',
-                       
+                        'message': 'added to cart',
+
                     })
         else:
                 return JsonResponse({
-                        'message' : 'already added to cart'
+                        'message': 'already added to cart'
                     })
-        
 
-class SessionCart(APIView):
-    def post(self, request):
-        user_id = request.data.get('user_id')
-        session_cart = request.data.get('cart')
-        user = User.objects.get(id=user_id)
 
-        # Check if the user has a cart already, if not create one
-        cart, created = Cart.objects.get_or_create(user=user)
+# class SessionCart(APIView):
+#     def post(self, request):
+#         user_id = request.data.get('user_id')
+#         session_cart = request.data.get('cart')
+#         user = User.objects.get(id=user_id)
 
-        for item in session_cart.values():
-            # Check if the item already exists in the user's cart
-            cart_item, created = CartItem.objects.get_or_create(product_id=item['id'], user=user, cart=cart)
+#         # Check if the user has a cart already, if not create one
+#         cart, created = Cart.objects.get_or_create(user=user)
 
-            # If the item already exists in the cart, update the quantity and price
-            if not created:
-                cart_item.quantity += item['quantity']
-                cart_item.price += item['price']
-            else:
-                # If the item is not already in the cart, create a new cart item
-                cart_item.quantity = item['quantity']
-                cart_item.price = item['price']
+#         for item in session_cart.values():
+#             # Check if the item already exists in the user's cart
+#             cart_item, created = CartItem.objects.get_or_create(
+#                 product_id=item['id'], user=user, cart=cart)
 
-            cart_item.save()
+#             # If the item already exists in the cart, update the quantity and price
+#             if not created:
+#                 cart_item.quantity += item['quantity']
+#                 cart_item.price += item['price']
+#             else:
+#                 # If the item is not already in the cart, create a new cart item
+#                 cart_item.quantity = item['quantity']
+#                 cart_item.price = item['price']
 
-        return JsonResponse({'message': 'session products added to cart'})
-    
+#             cart_item.save()
+
+#         return JsonResponse({'message': 'session products added to cart'})
+
 
 class Session_cart_view(APIView):
-    def post(self,request):
+    def post(self, request):
         print('session code is called')
-        user_id  = request.data.get('user_id')
+        user_id = request.data.get('user_id')
         session_cart = request.data.get('cart')
 
         try:
@@ -92,28 +97,29 @@ class Session_cart_view(APIView):
 
         try:
             cart = Cart.objects.get(user=user)
-            print('cart_id' , cart.id)
+            print('cart_id', cart.id)
         except Cart.DoesNotExist:
             cart = Cart.objects.create(user=user)
-            print('cart_created' , cart.id)
+            print('cart_created', cart.id)
 
         for items in session_cart.values():
             product = Product.objects.get(id=items['id'])
-            cart_item = CartItem.objects.filter(product=product, user=user, cart=cart).first()
+            cart_item = CartItem.objects.filter(
+                product=product, user=user, cart=cart).first()
 
             if cart_item:
                 cart_item.quantity += items['quantity']
                 cart_item.price += items['price']
+                cart_item.price = round(cart_item.price)
+            
                 cart_item.save()
             else:
-                cart_item = CartItem.objects.create(product=product, user=user, cart=cart, quantity=items['quantity'], price=items['price'])
+                cart_item = CartItem.objects.create(
+                    product=product, user=user, cart=cart, quantity=items['quantity'], price=items['price'])
 
         return JsonResponse({
-            'message' : 'added to cart'
+            'message': 'added to cart'
         })
-
-            
-
 
 
 class CartView(APIView):
@@ -168,7 +174,7 @@ class CartItemView(APIView):
             for item in cartitem:
                 total_price += item.price
             serializer = CartItemSerializer(cartitem, many=True).data
-            return Response({'cart_items': serializer, 'total_price': total_price, 'price': item.price}, status=status.HTTP_200_OK)
+            return JsonResponse({'cart_items': serializer, 'total_price': total_price, 'price': item.price}, status=status.HTTP_200_OK)
 
 
 @csrf_exempt
@@ -182,10 +188,16 @@ def increase_cart(request):
     cart_item = CartItem.objects.get(product=product, user=user)
     cart_item.quantity += 1
     cart_item.price = cart_item.product.price * cart_item.quantity
+    
+    if cart_item.quantity > 4:
+        return Response({
+            'message': 'you can only buy 4 items'
+        })
     cart_item.save()
     return JsonResponse({
         'message': cart_item.quantity,
-        'price': cart_item.price
+        'price': cart_item.price,
+        'cart' : cart_item,
     })
 
 
@@ -198,10 +210,19 @@ def decrease_cart(request):
     user = User.objects.get(id=user_id)
     cart_item = CartItem.objects.get(product=product, user=user)
     cart_item.quantity -= 1
-    cart_item.price = cart_item.product.price - cart_item.quantity
+    cart_item.price = round(cart_item.product.price - cart_item.quantity)
+    
+    if cart_item.quantity < 1:
+        cart_item.delete()
+        return Response({
+            'message': 'cart item deleted'
+        })
     cart_item.save()
     return JsonResponse({
-        'message': cart_item.quantity
+        'message': cart_item.quantity,
+        'price' : cart_item.price,
+        'cart' : cart_item,
+        
     })
 
 
@@ -220,21 +241,22 @@ class CountView(APIView):
         return JsonResponse({'message': count})
 
 
-class Caer_item_count(APIView):
-    def get(self,request):
+class Cart_item_count(APIView):
+    def get(self, request):
         user_id = request.GET.get('userID')
         try:
-            user  = User.objects.get(id = user_id)
-            cart_item = CartItem.objects.filter(user = user)
+            user = User.objects.get(id=user_id)
+            cart_item = CartItem.objects.filter(user=user)
             count = 0
             count = cart_item.count()
             return JsonResponse({
-                'message' : count
+                'message': count
             })
         except User.DoesNotExist:
             return JsonResponse({
-                'message' : 'user does not exists'
+                'message': 'user does not exists'
             })
+
 
 class User_address(APIView):
 
@@ -244,7 +266,7 @@ class User_address(APIView):
         return Response(serializer, status=status.HTTP_200_OK)
 
 
-class User_regsiter(APIView):
+class User_register(APIView):
 
     def get(self, request):
         user = User.objects.all()
@@ -320,18 +342,118 @@ class CArtCount(APIView):
 
 
 class RemoveItem(APIView):
-    def post(self,request):
+    def post(self, request):
         user_id = request.data.get('userID')
         product_id = request.data.get('product_id')
-        user= User.objects.get(id = user_id)
-        product = Product.objects.get(id = product_id)
-        cart = Cart.objects.get(user = user)
-        cart_item = CartItem.objects.filter(product = product,user = user,cart = cart)
+        user = User.objects.get(id=user_id)
+        product = Product.objects.get(id=product_id)
+        cart = Cart.objects.get(user=user)
+        cart_item = CartItem.objects.filter(
+            product=product, user=user, cart=cart)
         if cart_item:
             cart_item.delete()
             return JsonResponse({
-                'message' : 'item deleted succesfully'
+                'message': 'item deleted succesfully',
+                'cart' : cart_item
             })
         return JsonResponse({
-            'message' : 'cart item does not found'
+            'message': 'cart item does not found'
         })
+
+
+class VoucherView(APIView):
+
+    def get(self, request):
+        voucher = Voucher.objects.filter(is_active=True)
+        serializer = VoucherSerializer(voucher, many=True).data
+        return Response(serializer, status=status.HTTP_202_ACCEPTED)
+
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        product_id = request.data.get('product_id')
+        voucher_code = request.data.get('voucher_code')
+        user = User.objects.get(id=user_id)
+        cart = Cart.objects.get(user=user)
+        product = Product.objects.get(id=product_id)
+        try:
+            voucher = Voucher.objects.get(code=voucher_code, is_active=True)
+        except Voucher.DoesNotExist:
+            return JsonResponse({
+                'message' : 'voucher is not found'
+            })
+        cart_item = CartItem.objects.get(product = product,user = user,cart = cart) 
+        if cart_item.price < voucher.discount_value:
+            return JsonResponse({
+                'message' : f'min spend value is {voucher.discount_value}'
+            })
+        if voucher and voucher.discount_type ==2:
+            cart_item.discount_amount = voucher.discount_value
+            if cart_item.discount_amount > voucher.max_discount:
+                cart_item.discount_amount = voucher.max_discount
+            cart_item.price = cart_item.price - cart_item.discount_amount
+            cart_item.price = round(cart_item.price)
+            cart_item.save()
+            cart_item.save()
+            voucher.is_active = False
+            voucher.save()
+            
+            return JsonResponse({
+                'message' : f'coupon is applied {cart_item.discount_amount}'
+            })
+        if voucher and voucher.discount_type ==1:
+            cart_item.discount_amount = voucher.discount_value
+            if cart_item.discount_amount > voucher.max_discount:
+                cart_item.discount_amount = voucher.max_discount
+            cart_item.price = cart_item.price - (cart_item.discount_amount/100)
+            cart_item.price = round(cart_item.price)
+            cart_item.save()
+            voucher.is_active = False
+            voucher.save()
+            return JsonResponse({
+                'message' : f'coupon is applied {cart_item.discount_amount}'
+            })
+        else:
+            return JsonResponse({
+                'message' : 'voucher not found'
+            })
+       
+        
+        
+
+class CreateCheckout(APIView):
+    def post(self,request):
+        user_id = request.data.get('user_id')
+        user = User.objects.get(user = user)
+        cart = Cart.objects.get(user  = user)
+        product_id = request.data.get('product_id')
+        product = Product.objects.get(id = product_id)
+        cart_items = CartItem.objects.get(cart = cart,user = user)
+        stripe.api_key = settings.STRIPE_KEY
+        checkout_session = stripe.checkout.Session.create(
+        # Customer Email is optional,
+        # It is not safe to accept email directly from the client side
+        
+        payment_method_types=['card'],
+        line_items=[
+            {
+                'price_data': {
+                    'currency': 'INR',
+                    'product_data': {
+                    'name': product.title,
+                    },
+                    'unit_amount': int(cart_items.price * 100),
+                },
+                'quantity': 1,
+            }
+        ],
+        mode='payment',
+      
+    )
+
+
+    
+        
+            
+        
+            
+

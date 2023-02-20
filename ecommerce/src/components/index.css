@@ -542,4 +542,22 @@ width: 70px;
   position: relative;
   
 }
+
+#form1{
+  width: 28px;
+    height: 9px;
+    margin-top: 7px;
+}
+
+#item_del{
+  color: black !important;
+}
+#item-plus{
+  color: black !important;
+}
+
+
+#item-minus{
+  color: black;
+}
   

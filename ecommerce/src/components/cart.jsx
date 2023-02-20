@@ -4,14 +4,17 @@ import './index.css'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
 import { FiPlus,FiMinus } from 'react-icons/fi'
-import { FiDelete } from 'react-icons/fi'
-import {FaBeer} from 'react-icons/fa'
+
+import DeleteIcon from '@material-ui/icons/Delete';
 
 export default function Cart() {
     const base_url  = "http://127.0.0.1:8000"
     const navigate = useNavigate();
-    
+    const [count,setCount] = useState(0)
     const [totalPrice,settotalPrice] = useState(0)
+    const [voucher,setVocuher] = useState('')
+    const [delivery,setDelivery] = useState('')
+    
     
     
     const backshopping = ()=>{
@@ -19,7 +22,6 @@ export default function Cart() {
     }
     const style1 = {
       backgroundColor : '#d2c9ff',
-
 
     }
     const style2 = {
@@ -38,30 +40,50 @@ export default function Cart() {
         setuserId('')
       }
       
-      if (userID) {
-        axios.post('http://127.0.0.1:8000/cart_view/', {
-            userID
-        })
-          .then(res => {
-            setCart(res.data.cart_items);
-            settotalPrice(res.data.total_price)
-            
-            console.log('price', totalPrice)
-           
-            console.log('cart',cart)
-            
-            
-            console.log('res',res.data)
-            
-           
-          })
-          .catch(error => {
-            console.error(error);
-          });
-      }
+      
+        
+
+
+         
+      
+     
       
 //eslint-disable-next-line
     }, [userID,totalPrice]);
+
+    const getcart = async()=>{
+        const response = await axios.post('http://127.0.0.1:8000/cart_view/', {
+            userID
+        })
+        
+        console.log('res',response.data.cart_items)
+        setCart(response.data.cart_items)
+        
+            // setCart(response.data.cart_items);
+            settotalPrice(response.data.total_price)
+            
+            // console.log('price', totalPrice)
+           
+            // console.log('cart',cart)
+            
+            
+            
+           
+         
+          
+
+     }
+     useEffect(()=>{
+        if(userID){
+            getcart();
+        }
+     },[userID])
+
+     console.log('cart',cart)
+
+     useEffect(()=>{
+        console.log(delivery)
+     },[delivery])
     
     
 
@@ -91,10 +113,13 @@ export default function Cart() {
 
         // Update the quantity of the product
         const updatedCart = [...cart];
+       
         updatedCart[productIndex].quantity = response.data.message;
+        updatedCart[productIndex].price = response.data.price
       
         // Call a setter function to update the cart state with the new quantity
         setCart(updatedCart);
+        
         console.log('update',updatedCart)
         
     }
@@ -108,11 +133,19 @@ export default function Cart() {
 
         // Update the quantity of the product
         const updatedCart = [...cart];
+        
         updatedCart[productIndex].quantity = response.data.message;
+        updatedCart[productIndex].price = response.data.price
+        // updatedCart[productIndex] = response.data.cart
       
         // Call a setter function to update the cart state with the new quantity
         setCart(updatedCart);
         console.log('update',updatedCart)
+        if (updatedCart.quantity < 1){
+            setCart([])
+        }
+        
+        
     }
 
     const handledelete = async(product_id)=>{
@@ -120,6 +153,46 @@ export default function Cart() {
             userID,product_id
         })
        
+        console.log(response.data.message)
+        console.log('delivery',delivery)
+        const productIndex = cart.findIndex(c => c.product.id === product_id);
+        const updatedCart = [...cart];
+        updatedCart[productIndex] = response.data.cart
+        setCart(updatedCart)
+        
+        
+        
+    }
+    
+
+    const cartcount = async () => {
+        if (userID) {
+
+            const response = await axios.get('http://127.0.0.1:8000/count/', {params : {userID}})
+            console.log(response.data)
+            setCount(response.data.message)
+        } else {
+            console.log('user id is not found')
+        }
+
+
+
+
+    }
+    window.cartcount = cartcount;
+    
+    useEffect(() => {
+        cartcount();
+    })
+
+    
+
+    const fetchvoucher = async(product_id)=>{
+        const response = await axios.post('http://127.0.0.1:8000/voucher/',{
+            user_id:userID,
+            product_id,
+            voucher_code : voucher,
+        })
         console.log(response.data.message)
     }
     
@@ -138,15 +211,15 @@ export default function Cart() {
                         <div className="col-12">
                             <div className="card card-registration card-registration-2" style={{...style2}}>
                                 <div className="card-body p-0">
+                                                {cart.map((cart,i) =>(
                                     <div className="row g-0">
                                         <div className="col-lg-8">
                                             <div className="p-5">
                                                 <div className="d-flex justify-content-between align-items-center mb-5">
                                                     <h1 className="fw-bold mb-0 text-black">Shopping Cart</h1>
-                                                    <h6 className="mb-0 text-muted">3 items</h6>
+                                                    <h6 className="mb-0 text-muted">{count}</h6>
                                                 </div>
                                                 <hr className="my-4"/>
-                                                {cart.map((cart,i) =>(
                                                     <div className="row mb-4 d-flex justify-content-between align-items-center" key={i}>
                                                         <div className="col-md-2 col-lg-2 col-xl-2">
                                                             <img
@@ -160,7 +233,7 @@ export default function Cart() {
                                                         <div className="col-md-3 col-lg-3 col-xl-2 d-flex">
                                                             <button className="btn btn-link px-2">
                                                                 
-                                                                <FiPlus onClick={()=> handleadd(cart.product.id)}/>
+                                                                <FiPlus id='item-plus' onClick={()=> handleadd(cart.product.id)}/>
                                                             </button>
                                                             
                                                            
@@ -174,10 +247,10 @@ export default function Cart() {
 
                                                             <button className="btn btn-link px-2">
                                                                 
-                                                                <FiMinus onClick={() => handleremove(cart.product.id)}/>
+                                                                <FiMinus id='item-minus' onClick={() => handleremove(cart.product.id)}/>
                                                             </button>
-                                                            <button className="btn btn-link px-2">
-                                                            <FaBeer onClick={() => handledelete(cart.product.id)}/>
+                                                            <button className="btn btn-link px-2" >
+                                                            <DeleteIcon id='item_del' onClick={() => handledelete(cart.product.id)}/>
                                                             
 
                                                             </button>
@@ -191,7 +264,7 @@ export default function Cart() {
                                                             <a href="#!" className="text-muted"><i className="fas fa-times"></i></a>
                                                         </div>
                                                     </div>
-                                                    ))}
+                                                    
 
                                                     
 
@@ -204,6 +277,7 @@ export default function Cart() {
                                                                         className="fas fa-long-arrow-alt-left me-2"></i>Back to shop</a></h6>
                                                                 </div>
                                                             </div>
+                                                        
                                                         </div>
                                                         <div className="col-lg-4 bg-grey">
                                                             <div className="p-5">
@@ -218,11 +292,11 @@ export default function Cart() {
                                                                     <h5 className="text-uppercase mb-3">Shipping</h5>
 
                                                                     <div className="mb-4 pb-2">
-                                                                        <select className="select">
-                                                                            <option value="1">Standard-Delivery- €5.00</option>
-                                                                            <option value="2">Two</option>
-                                                                            <option value="3">Three</option>
-                                                                            <option value="4">Four</option>
+                                                                        <select className="select" onChange={(event)=> {setDelivery(event.target.value)}}>
+                                                                            <option value="Standard-Delivery">Standard-Delivery- 5.00</option>
+                                                                            <option value="Two">Two</option>
+                                                                            <option value="Three">Three</option>
+                                                                            <option value="Four">Four</option>
                                                                         </select>
                                                                     </div>
 
@@ -230,10 +304,13 @@ export default function Cart() {
 
                                                                     <div className="mb-5">
                                                                         <div className="form-outline">
-                                                                            <input type="text" id="form3Examplea2" className="form-control form-control-lg" />
+                                                                            <input type="email" id="form3Examplea2" className="form-control form-control-lg" value={voucher} onChange ={(event) =>setVocuher(event.target.value)} />
                                                                             <label className="form-label" htmlFor="form3Examplea2">Enter your code</label>
                                                                         </div>
+                                                                        <button type="submit" className="btn btn-dark btn-block btn-sm"
+                                                                            data-mdb-ripple-color="dark" onClick={() => fetchvoucher(cart.product.id)}>Apply voucher</button>
                                                                     </div>
+                                                                    
 
                                                                     <hr className="my-4"/>
 
@@ -248,6 +325,7 @@ export default function Cart() {
                                                                     </div>
                                                             </div>
                                                         </div>
+                                                        ))}
                                                     </div>
                                             </div>
                                         </div>

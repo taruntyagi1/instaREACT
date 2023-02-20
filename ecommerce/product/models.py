@@ -97,6 +97,7 @@ class CartItem(models.Model):
         Variant, on_delete=models.CASCADE, null=True, blank=True, related_name='variants')
     price = models.IntegerField(null = True, blank=True,default= 0)
     quantity = models.IntegerField(default=1, null=True, blank=True)
+    discount_amount = models.CharField(max_length=1000,null = True,blank = True)
 
     
 
@@ -112,3 +113,27 @@ class UserAddress(models.Model):
 
     def __str__(self):
         return self.user.username
+
+Percent = 1
+fixed = 2
+voucher_choice = (
+    (Percent , 'percent'),
+    (fixed , "Fixed")
+)
+class Voucher(models.Model):
+    code = models.CharField(max_length=50, unique=True)
+    discount_type = models.IntegerField( choices=voucher_choice)
+    discount_value = models.DecimalField(max_digits=12, decimal_places=2)
+    min_spend = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    max_discount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+
+
+    class Meta:
+        verbose_name_plural = 'Voucher'
+
+    def __str__(self):
+        return self.code
+
+

@@ -24,11 +24,16 @@ class customItems(admin.ModelAdmin):
 class custom_address(admin.ModelAdmin):
     list_display = ['user','address','default_address']
     ordering =('id',)
+
+class custom_voucher(admin.ModelAdmin):
+    list_display = ['code','discount_type','discount_value','min_spend','is_active']
+    ordering  = ('id',)
 admin.site.register(Category,custom_category)
 admin.site.register(Product,custom_product)
 admin.site.register(Variant,custom_variant)
 admin.site.register(Cart,customcart)
 admin.site.register(CartItem,customItems)
 admin.site.register(UserAddress,custom_address)
+admin.site.register(Voucher,custom_voucher)
 
 

@@ -83,3 +83,12 @@ class Userserializer(serializers.ModelSerializer):
         fields = (
             'first_name','last_name','email','username','phone_number','password'
         )
+
+
+class VoucherSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Voucher
+        fields = (
+            'code','discount_type','discount_value','min_spend','max_discount','is_active'
+        )

@@ -136,9 +136,9 @@ export default function Product(props) {
   return (
     <div className='products' key={props.id}>
     <Card key={props.id}   style={{ width: "inherit" }}>
-        <Card.Img variant="top" src={props.image}  key = {props.id} id = "prd_image"  />
+        <Card.Img variant="top" src={props.image} alt = {props.title} title = {props.title}  key = {props.id} id = "prd_image"  />
         <Card.Body>
-          <Card.Title>Card Title</Card.Title>
+          <Card.Title>{props.title}</Card.Title>
           <Card.Text>
             Some quick example text to build on the card title and make up the
             bulk of the card's content.
